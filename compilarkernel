@@ -1,0 +1,188 @@
+Compilar kernel:
+
+Ref:
+
+http://gnulinuxvagos.es/topic/22-configurar-y-compilar-el-kernel-linux-varios-m%C3%A9todos/
+http://gnulinuxvagos.es/topic/1873-dkms-gestionando-m%C3%B3dulos-del-kernel-de-manera-din%C3%A1mica/
+http://rodolfoarce.com/2012/03/dkms/
+
+
+
+Método clásico:
+
+1.- Instalar los paquetes:
+
+	libncurses5-dev build-essential initramfs-tools bc
+
+2.- Descargar la version del kernel que queramos instalar:
+		
+	www.kernel.org
+
+3.- Descomprimir el kernel
+
+	tar -xvf linux-X.tar.xz
+	mv linux-X /usr/src
+
+4.- Crear enlace simbólico:
+	
+	ln -s /usr/src/linux-3.6.5 /usr/src/linux
+
+	Si existe, borrar previamente:
+	
+	rm /usr/src/linux
+
+5.- Configurar y compilar el kernel:
+
+	cd /usr/src/linux	
+	make clean
+	make mrproper
+	make menuconfig
+
+	Si queremos quedarnos con la configuración previa que teniamos:
+	
+	make oldconfig
+
+	Si queremos tener el config con los módulos que estamos usando ahora:
+
+	make localmodconfig
+
+6.- Compilar e instalar
+
+	make; make modules; make modules_install install
+
+	Si no se genera initrd
+
+	mkinitramfs -o /boot/initrd.img-X /lib/modules/X
+
+7.- Actualizar grub
+
+	update-grub
+
+
+Método debian:
+
+1.- Instalar los paquetes necesarios:
+
+	apt-get install libncurses5-dev build-essential initramfs-tools kernel-package
+
+Igual que el anterior hasta el punto 6
+
+6.- Compilar e instalar
+
+	make-kpkg --initrd kernel_image kernel_headers
+
+	dpkg -i /usr/src/linux*.deb
+
+
+Método externo:
+
+Proceso similar a los anteriores, teniendo en cuenta en coger el .config de la máquina externa.
+
+A la hora de compilar es la diferencia:
+
+a) Si la máquina es de la misma arquitectura:
+	
+	make-kpkg --initrd kernel_image kernel_headers
+
+b) Si la máquina externa es de 32 bits y queremos compilar en una de 64 bits:
+
+	linux32 make-kpkg --rootcmd fakeroot --cross-compile - --arch=i386 --initrd kernel_image kernel_headers
+
+c) Si la máquina externa es de 64 bits y queremos compilar con una de 32 bits:
+
+	make-kpkg --rootcmd fakeroot --cross-compile - --arch=amd64 --initrd kernel_image kernel_headers
+
+Compilar sólo un módulo:
+
+
+
+- Método Raspberry Pi
+
+
+Referencias:
+http://bchavez.bitarmory.com/archive/2013/01/16/compiling-kernel-modules-for-raspberry-pi.aspx
+http://elinux.org/RPi_Kernel_Compilation
+http://www.armadeus.com/wiki/index.php?title=Linux_Boot_Logo
+
+Usamos el método "Cross compile": lo compilamos en otro entorno diferente a la raspberry pi.
+
+Variables:
+
+
+1.- Conseguimos la imágen del kernel en https://github.com/raspberrypi/linux
+	a) Buscamos el tar.gz
+	o bien
+	b) Las bajamos con git (apt-get install git)
+		git init
+		git clone --depth 1 git://github.com/raspberrypi/linux.git
+		git checkout rpi-3.2.27
+
+2.- Establecemos la variable KERNEL_SRC
+	export KERNEL_SRC=/home/me/linux/
+
+3.- Nos bajamos las herramientas de compilacion:
+	git clone git://github.com/raspberrypi/tools.git
+	apt-get install gcc-arm-linux-gnueabi make ncurses-dev
+
+	Si estamos en una arquitectura que no es i386, también bajamos las librerías:
+	apt-get install ia32-libs
+
+4.- En el director KERNEL_SRC, 
+	a) Limpiamos lo que haya antes
+		make mrproper
+	b) Cogemos un config de la raspberry pi que ya funcione /proc/config.gz
+		zcat config.gz > .config
+	c) Establecemos la variable CCPREFIX	
+		export CCPREFIX=/path/to/your/compiler/binary/prefix-of-binary-
+		Ej: export CCPREFIX=/tools/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin/arm-bcm2708-linux-gnueabi-
+	d) Por si acaso metemos en PATH donde se encuentra el compilador
+		cd {wherever}
+		export PATH="$PATH:$PWD"
+		cd -
+	e) Compilamos el nuevo config con el oldconfig
+		make ARCH=arm CROSS_COMPILE=${CCPREFIX} oldconfig
+	f) Compilamos nuevas opciones si queremos
+		make ARCH=arm CROSS_COMPILE=${CCPREFIX} menuconfig
+	g) Compilamos
+		make ARCH=arm CROSS_COMPILE=${CCPREFIX}
+	h) Para los modulos
+		make ARCH=arm CROSS_COMPILE=${CCPREFIX} modules
+
+
+5.- Una vez compilado, pasamos el nuevo kernel a nuestra raspberry pi (dejar el mismo nombre de kernel.img)
+	El kernel nuevo se encuentra en: arch/arm/boot/Image
+	Copiar el nuevo kernel a /boot
+
+	-rwxr-xr-x 1 root root 5673200 ene 15 22:49 Image
+
+6.- Para transferir los modulos:
+	export MODULES_TEMP=/directoriodemodulos
+	En el directorio KERNEL_SRC:
+	make ARCH=arm CROSS_COMPILE=${CCPREFIX} INSTALL_MOD_PATH=${MODULES_TEMP} modules_install
+	
+	drwxr-xr-x 4 root root 4096 ene 15 23:11 lib
+
+7.- Copiamos el directorio de modulos generados(lib) en 6 al /lib de la raspberry pi. 
+    Es conveniente que esto lo hagamos offline en raspberry pi, montando la tarjeta en otro ordenador
+	Comprimir: tar -zcvf lib.tar.gz $MODULES_TEMP/lib
+	Descomprimir en raspberry pi: tar -zxvf lib.tar.gz
+
+
+There is a script in the kernel source;
+
+scripts/kconfig/merge_config.sh
+
+It will take 2 kernel configs as arguments - it will merge the 2nd on top of the first. Anything in the 2nd config will override the first config - even if it is a line like "# CONFIG_ is not set"
+
+
+
+
+
+	
+
+
+
+
+
+
+
